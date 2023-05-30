@@ -2,8 +2,11 @@ package org.vitalvale.Server;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.protobuf.InvalidProtocolBufferException;
+import com.google.flatbuffers.FlexBuffers;
+import com.google.flatbuffers.FlexBuffersBuilder;
+import com.google.flatbuffers.ReadBuf;
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufInputStream;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.socket.DatagramPacket;
@@ -11,7 +14,6 @@ import io.netty.channel.socket.DatagramPacket;
 import org.vitalvale.Server.Network.NetworkPlayer;
 import org.vitalvale.Server.Packets.Outbound.impl.PlayOutServerRoomList;
 import org.vitalvale.Server.Packets.PacketIdMapper;
-import org.vitalvale.Structures.Packets;
 import org.vitalvale.VitalVale;
 import org.xerial.snappy.Snappy;
 
@@ -19,6 +21,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 
 public class GameServerHandler extends SimpleChannelInboundHandler<DatagramPacket> {
 
@@ -32,18 +35,20 @@ public class GameServerHandler extends SimpleChannelInboundHandler<DatagramPacke
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, DatagramPacket packet) throws IOException {
         ByteBuf buffer = packet.content();
-        byte[] PayloadBytes = new byte[buffer.readableBytes()];
-        buffer.readBytes(PayloadBytes);
-
 
         int packetId = -1;
+        int playerId = -1;
+
+        FlexBuffers.Reference ref = FlexBuffers.getRoot(buffer.nioBuffer());
+
+        FlexBuffers.Map data = ref.asMap();
 
 
+        packetId = data.get("packetid").asInt();
+        playerId = data.get("playerid").asInt();
 
-        Packets.PacketIDExtractor Packet = Packets.PacketIDExtractor.parseFrom(PayloadBytes);
-        packetId = Packet.getPacketID();
 
-        VitalVale.getVitalog().Log("PACKET DATA: Received Packet with Numerical id of " + packetId);
+        VitalVale.getVitalog().Log("PACKET DATA: Received Packet with Numerical id of " + packetId + " , Player id of " + playerId);
 
 
 //        try {
@@ -82,7 +87,7 @@ public class GameServerHandler extends SimpleChannelInboundHandler<DatagramPacke
 //        System.out.println("2: " + playerId);
 //        System.out.println("3: " + data);
         if (packetId != -1) return;
-        HandlePacket(ctx, packet.sender(), packetId, PayloadBytes);
+//        HandlePacket(ctx, packet.sender(), packetId, PayloadBytes);
     }
 
     /**
@@ -108,23 +113,23 @@ public class GameServerHandler extends SimpleChannelInboundHandler<DatagramPacke
         switch (PacketIdMapper.getEnumByPacketId(packetId)) {
             case PlayInServerRoomList -> {
 
-                try {
-                    Packets.PlayInRoomList pRoomList = Packets.PlayInRoomList.parseFrom(payload);
-
-                    VitalVale.getNetworkPlayers().get(sender.getHostString()).setPlayerID(pRoomList.getPlayerID());
-
-                    Packets.PlayOutRoomList.Builder packetBuilder  = Packets.PlayOutRoomList.newBuilder();
-                    packetBuilder.setPacketID(0);
-                    packetBuilder.addAllSessions(VitalVale.getSessionManager().getSessions());
-                    Packets.PlayOutRoomList packet = packetBuilder.build();
-
-                    byte[] packetBytes = packet.toByteArray();
-                    System.out.println("Packet Length: " + packetBytes.length);
-
-                    ctx.writeAndFlush(packetBytes);
-                } catch (InvalidProtocolBufferException e) {
-                    throw new RuntimeException(e);
-                }
+//                try {
+//                    Packets.PlayInRoomList pRoomList = Packets.PlayInRoomList.parseFrom(payload);
+//
+//                    VitalVale.getNetworkPlayers().get(sender.getHostString()).setPlayerID(pRoomList.getPlayerID());
+//
+//                    Packets.PlayOutRoomList.Builder packetBuilder  = Packets.PlayOutRoomList.newBuilder();
+//                    packetBuilder.setPacketID(0);
+//                    packetBuilder.addAllSessions(VitalVale.getSessionManager().getSessions());
+//                    Packets.PlayOutRoomList packet = packetBuilder.build();
+//
+//                    byte[] packetBytes = packet.toByteArray();
+//                    System.out.println("Packet Length: " + packetBytes.length);
+//
+//                    ctx.writeAndFlush(packetBytes);
+//                } catch (InvalidProtocolBufferException e) {
+//                    throw new RuntimeException(e);
+//                }
 
 
 
