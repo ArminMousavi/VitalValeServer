@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 public class GameServerHandler extends SimpleChannelInboundHandler<DatagramPacket> {
 
@@ -37,18 +38,15 @@ public class GameServerHandler extends SimpleChannelInboundHandler<DatagramPacke
         ByteBuf buffer = packet.content();
 
         int packetId = -1;
-        int playerId = -1;
 
         FlexBuffers.Reference ref = FlexBuffers.getRoot(buffer.nioBuffer());
 
-        FlexBuffers.Map data = ref.asMap();
+        FlexBuffers.Vector payload = ref.asVector();
 
 
-        packetId = data.get("packetid").asInt();
-        playerId = data.get("playerid").asInt();
+        packetId = payload.get(0).asInt();
 
-
-        VitalVale.getVitalog().Log("PACKET DATA: Received Packet with Numerical id of " + packetId + " , Player id of " + playerId);
+        VitalVale.getVitalog().Log("PACKET DATA: Received Packet with Numerical id of " + packetId);
 
 
 //        try {
@@ -86,8 +84,8 @@ public class GameServerHandler extends SimpleChannelInboundHandler<DatagramPacke
 //        System.out.println("1: " + packetId);
 //        System.out.println("2: " + playerId);
 //        System.out.println("3: " + data);
-        if (packetId != -1) return;
-//        HandlePacket(ctx, packet.sender(), packetId, PayloadBytes);
+        if (packetId == -1) return;
+        HandlePacket(ctx, packet.sender(), packetId, payload);
     }
 
     /**
@@ -99,7 +97,7 @@ public class GameServerHandler extends SimpleChannelInboundHandler<DatagramPacke
      * @param payload  The Payload (Data) Of the Packet.
      * @throws JsonProcessingException If there's an Error in processing and Deserializing the Packet.
      */
-    public void HandlePacket(ChannelHandlerContext ctx, InetSocketAddress sender, int packetId, byte[] payload) throws JsonProcessingException {
+    public void HandlePacket(ChannelHandlerContext ctx, InetSocketAddress sender, int packetId, FlexBuffers.Vector payload) throws JsonProcessingException {
         ObjectMapper mapper = new ObjectMapper();
 
         if (!VitalVale.getNetworkPlayers().containsKey(sender.getHostString())) {
@@ -113,6 +111,36 @@ public class GameServerHandler extends SimpleChannelInboundHandler<DatagramPacke
         switch (PacketIdMapper.getEnumByPacketId(packetId)) {
             case PlayInServerRoomList -> {
 
+
+                FlexBuffersBuilder builder = new FlexBuffersBuilder();
+                int smap = builder.startMap();
+
+                Arrays.stream(VitalVale.getSessionManager().getAllSessions()).filter(gameSession -> !gameSession.isStarted()).findAny().stream().forEach(gameSession -> {
+                    int svec = builder.startMap();
+                    builder.putInt("session_id", gameSession.getSessionId());
+                    builder.putInt("player_num", gameSession.getCurrentPlayers());
+                    builder.putInt("m_players", gameSession.getMaxPlayers());
+                    builder.putBoolean("is_started", gameSession.isStarted());
+                    builder.putString("game_map", gameSession.getGameMap());
+                    builder.endMap(String.valueOf(gameSession.getSessionId()), svec);
+                });
+
+                int sv = builder.startMap();
+                builder.putInt("session_id", 69);
+                builder.putInt("player_num", 12);
+                builder.putInt("m_players", 16);
+                builder.putBoolean("is_started", false);
+                builder.putString("game_map", "dust");
+                builder.endMap("69", sv);
+
+
+
+                builder.endMap(null, smap);
+
+                ByteBuffer bb = builder.finish();
+
+                ctx.writeAndFlush(bb.array());
+                VitalVale.getVitalog().Log("Sent Packet with size of: " + bb.array().length);
 //                try {
 //                    Packets.PlayInRoomList pRoomList = Packets.PlayInRoomList.parseFrom(payload);
 //
@@ -130,9 +158,6 @@ public class GameServerHandler extends SimpleChannelInboundHandler<DatagramPacke
 //                } catch (InvalidProtocolBufferException e) {
 //                    throw new RuntimeException(e);
 //                }
-
-
-
 
 
                 break;
